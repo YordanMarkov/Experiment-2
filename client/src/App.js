@@ -4,7 +4,7 @@ import ContextDiagram from './ContextDiagram';
 import ContainerDiagramMermaid from './ContainerDiagramMermaid';
 
 const API_BASE_URL =
-  window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
+  window.location.hostname === 'localhost' ? 'http://localhost:3001' : '/api';
 
 const STEP_ORDER = ['analyze', 'srs', 'context', 'container'];
 
