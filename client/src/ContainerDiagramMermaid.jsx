@@ -5,6 +5,7 @@ mermaid.initialize({
   startOnLoad: false,
   theme: 'default',
   securityLevel: 'loose',
+  suppressErrorRendering: true,
 });
 
 function cleanChart(chart) {

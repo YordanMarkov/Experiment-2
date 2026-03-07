@@ -80,6 +80,7 @@ function App() {
 
     try {
       setLoading(true);
+      setOutputType('text');
       setResult('Generating C4 Context Diagram...');
 
       const response = await fetch('http://localhost:3001/generate-c4-context', {
@@ -111,6 +112,7 @@ function App() {
 
     try {
       setLoading(true);
+      setOutputType('text');
       setResult('Generating C4 Container Diagram...');
 
       const response = await fetch('http://localhost:3001/generate-c4-container', {
