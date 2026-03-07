@@ -164,11 +164,12 @@ Generate a C4 Level 1 Context Diagram using Mermaid syntax.
 
 Rules:
 - Use Mermaid C4Context format
+- Return Mermaid code only
+- Do not wrap the output in triple backticks
 - The system name is requirements.system_name
-- Actors are external users or systems interacting with the system
+- Actors are external users or external systems interacting with the system
 - Include relationships between actors and the system
 - Do not invent internal containers
-- Return Mermaid code only
 
 Example format:
 
@@ -203,6 +204,82 @@ Rel(system, email, "Sends emails")
   } catch (error) {
     console.error('Generate C4 Context failed:', error);
     res.status(500).json({ error: 'Failed to generate C4 Context.' });
+  }
+});
+
+app.post('/generate-c4-container', async (req, res) => {
+  try {
+    console.log('Received /generate-c4-container request');
+
+    const { requirements } = req.body;
+
+    if (!requirements) {
+      return res.status(400).json({ error: 'Requirements JSON is required.' });
+    }
+
+    const response = await client.chat.completions.create({
+      model: 'gpt-4.1-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `
+You are a software architect.
+
+Generate a C4 Level 2 Container Diagram using Mermaid syntax.
+
+Rules:
+- Use Mermaid C4Container format
+- Return Mermaid code only
+- Do not wrap the output in triple backticks
+- Base the diagram on the provided requirements JSON
+- Include only realistic high-level containers
+- Typical containers may include:
+  - Web Application / Frontend
+  - Backend API
+  - Database
+  - External Email Service
+- Include relationships between users, containers, database, and external systems
+- Do not invent unnecessary technologies unless strongly implied
+- If technology is unknown, use generic labels like "Web Application", "Backend Service", or "Database"
+
+Example format:
+
+C4Container
+title Example System
+
+Person(user, "User")
+Person(admin, "Admin")
+System_Ext(email, "Email Service")
+
+System_Boundary(system, "Example System") {
+  Container(web, "Web Application", "React", "Allows users and admins to interact with the system")
+  Container(api, "Backend API", "Node.js/Express", "Handles business logic and booking operations")
+  ContainerDb(db, "Database", "PostgreSQL", "Stores users, bookings, schedules, and trainers")
+}
+
+Rel(user, web, "Uses")
+Rel(admin, web, "Uses")
+Rel(web, api, "Sends requests to")
+Rel(api, db, "Reads from and writes to")
+Rel(api, email, "Sends emails via")
+          `.trim(),
+        },
+        {
+          role: 'user',
+          content: JSON.stringify(requirements, null, 2),
+        },
+      ],
+    });
+
+    const output = response.choices[0].message.content;
+    console.log('C4 CONTAINER OUTPUT:', output);
+
+    res.json({
+      output,
+    });
+  } catch (error) {
+    console.error('Generate C4 Container failed:', error);
+    res.status(500).json({ error: 'Failed to generate C4 Container.' });
   }
 });
 

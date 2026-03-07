@@ -94,6 +94,34 @@ function App() {
     }
   };
 
+  const handleGenerateC4Container = async () => {
+    if (!requirements) return;
+
+    try {
+      setLoading(true);
+      setResult('Generating C4 Container Diagram...');
+
+      const response = await fetch('http://localhost:3001/generate-c4-container', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requirements }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setResult(data.error || 'Something went wrong.');
+        return;
+      }
+
+      setResult(data.output);
+    } catch (error) {
+      setResult('Could not connect to the server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="App">
       <h1>AI-Assisted Requirement Synthesis</h1>
@@ -134,6 +162,16 @@ function App() {
         style={{ marginTop: '12px', marginLeft: '10px' }}
       >
         Generate C4 Context
+      </button>
+
+      <button
+        type="button"
+        className="submit-button"
+        onClick={handleGenerateC4Container}
+        disabled={!requirements || loading}
+        style={{ marginTop: '12px', marginLeft: '10px' }}
+      >
+        Generate C4 Container
       </button>
 
       <div className="output-box">
