@@ -83,7 +83,9 @@ Rules:
 
 app.post('/generate-srs', async (req, res) => {
   try {
+    console.log('Received /generate-srs request');
     const { requirements } = req.body;
+    console.log('Requirements:', requirements);
 
     if (!requirements) {
       return res.status(400).json({ error: 'Requirements JSON is required.' });
@@ -123,11 +125,14 @@ Rules:
       ],
     });
 
+    const output = response.choices[0].message.content;
+    console.log('SRS OUTPUT:', output);
+
     res.json({
-      output: response.choices[0].message.content,
+      output,
     });
   } catch (error) {
-    console.error(error);
+    console.error('Generate SRS failed:', error);
     res.status(500).json({ error: 'Failed to generate SRS.' });
   }
 });

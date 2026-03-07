@@ -39,7 +39,13 @@ function App() {
   };
 
   const handleGenerateSRS = async () => {
-    if (!requirements) return;
+    if (!requirements) {
+      console.log('No requirements available');
+      return;
+    }
+
+    console.log('Generate SRS clicked');
+    console.log('Requirements being sent:', requirements);
 
     try {
       setLoading(true);
@@ -51,7 +57,10 @@ function App() {
         body: JSON.stringify({ requirements }),
       });
 
+      console.log('Response status:', response.status);
+
       const data = await response.json();
+      console.log('Response data:', data);
 
       if (!response.ok) {
         setResult(data.error || 'Something went wrong.');
@@ -60,6 +69,7 @@ function App() {
 
       setResult(data.output);
     } catch (error) {
+      console.error('Generate SRS error:', error);
       setResult('Could not connect to the server.');
     } finally {
       setLoading(false);
