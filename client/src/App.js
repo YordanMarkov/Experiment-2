@@ -3,6 +3,9 @@ import { useMemo, useRef, useState } from 'react';
 import ContextDiagram from './ContextDiagram';
 import ContainerDiagramMermaid from './ContainerDiagramMermaid';
 
+const API_BASE_URL =
+  window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
+
 const STEP_ORDER = ['analyze', 'srs', 'context', 'container'];
 
 const STEP_LABELS = {
@@ -564,7 +567,7 @@ function App() {
   };
 
   const runAnalyze = async (runId) => {
-    const data = await postJson('http://localhost:3001/generate', { input: text });
+    const data = await postJson(`${API_BASE_URL}/generate`, { input: text });
     const raw = JSON.stringify(data.output, null, 2);
 
     const entry = {
@@ -590,9 +593,7 @@ function App() {
   };
 
   const runSRS = async (sourceRequirements, runId) => {
-    const data = await postJson('http://localhost:3001/generate-srs', {
-      requirements: sourceRequirements,
-    });
+    const data = await postJson(`${API_BASE_URL}/generate-srs`, { requirements: sourceRequirements });
 
     const entry = {
       id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -615,9 +616,7 @@ function App() {
   };
 
   const runContext = async (sourceRequirements, runId) => {
-    const data = await postJson('http://localhost:3001/generate-c4-context', {
-      requirements: sourceRequirements,
-    });
+    const data = await postJson(`${API_BASE_URL}/generate-c4-context`, { requirements: sourceRequirements });
 
     const entry = {
       id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -639,9 +638,7 @@ function App() {
   };
 
   const runContainer = async (sourceRequirements, runId) => {
-    const data = await postJson('http://localhost:3001/generate-c4-container', {
-      requirements: sourceRequirements,
-    });
+    const data = await postJson(`${API_BASE_URL}/generate-c4-container`, { requirements: sourceRequirements });
 
     const entry = {
       id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

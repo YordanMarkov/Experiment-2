@@ -13,6 +13,10 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 app.post('/generate', async (req, res) => {
   try {
     const { input } = req.body;
