@@ -225,43 +225,33 @@ app.post('/generate-c4-container', async (req, res) => {
           content: `
 You are a software architect.
 
-Generate a C4 Level 2 Container Diagram using Mermaid syntax.
+Generate a C4 Level 2 Container Diagram using Mermaid flowchart syntax.
 
 Rules:
-- Use Mermaid C4Container format
+- Use Mermaid flowchart syntax (flowchart LR)
+- Do NOT use C4Container syntax
 - Return Mermaid code only
-- Do not wrap the output in triple backticks
-- Base the diagram on the provided requirements JSON
-- Include only realistic high-level containers
-- Typical containers may include:
-  - Web Application / Frontend
-  - Backend API
-  - Database
-  - External Email Service
-- Include relationships between users, containers, database, and external systems
-- Do not invent unnecessary technologies unless strongly implied
-- If technology is unknown, use generic labels like "Web Application", "Backend Service", or "Database"
+- Do not include triple backticks
 
-Example format:
+Represent containers as nodes:
+User --> Web App --> Backend API --> Database
 
-C4Container
-title Example System
+Example structure:
 
-Person(user, "User")
-Person(admin, "Admin")
-System_Ext(email, "Email Service")
+flowchart LR
 
-System_Boundary(system, "Example System") {
-  Container(web, "Web Application", "React", "Allows users and admins to interact with the system")
-  Container(api, "Backend API", "Node.js/Express", "Handles business logic and booking operations")
-  ContainerDb(db, "Database", "PostgreSQL", "Stores users, bookings, schedules, and trainers")
-}
+User["User"]
+Admin["Admin"]
+WebApp["Web Application"]
+API["Backend API"]
+Database[("Database")]
+EmailService["Email Service"]
 
-Rel(user, web, "Uses")
-Rel(admin, web, "Uses")
-Rel(web, api, "Sends requests to")
-Rel(api, db, "Reads from and writes to")
-Rel(api, email, "Sends emails via")
+User --> WebApp
+Admin --> WebApp
+WebApp --> API
+API --> Database
+API --> EmailService
           `.trim(),
         },
         {

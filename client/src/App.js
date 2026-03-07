@@ -1,11 +1,13 @@
 import './App.css';
 import { useState } from 'react';
+import MermaidDiagram from './MermaidDiagram';
 
 function App() {
   const [text, setText] = useState('');
   const [result, setResult] = useState('');
   const [requirements, setRequirements] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [outputType, setOutputType] = useState('text');
 
   const handleAnalyze = async (e) => {
     e.preventDefault();
@@ -25,13 +27,16 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
+        setOutputType('text');
         setResult(data.error || 'Something went wrong.');
         return;
       }
 
       setRequirements(data.output);
+      setOutputType('json');
       setResult(JSON.stringify(data.output, null, 2));
     } catch (error) {
+      setOutputType('text');
       setResult('Could not connect to the server.');
     } finally {
       setLoading(false);
@@ -54,12 +59,15 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
+        setOutputType('text');
         setResult(data.error || 'Something went wrong.');
         return;
       }
 
+      setOutputType('markdown');
       setResult(data.output);
     } catch (error) {
+      setOutputType('text');
       setResult('Could not connect to the server.');
     } finally {
       setLoading(false);
@@ -82,12 +90,15 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
+        setOutputType('text');
         setResult(data.error || 'Something went wrong.');
         return;
       }
 
+      setOutputType('mermaid');
       setResult(data.output);
     } catch (error) {
+      setOutputType('text');
       setResult('Could not connect to the server.');
     } finally {
       setLoading(false);
@@ -110,12 +121,15 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
+        setOutputType('text');
         setResult(data.error || 'Something went wrong.');
         return;
       }
 
+      setOutputType('mermaid');
       setResult(data.output);
     } catch (error) {
+      setOutputType('text');
       setResult('Could not connect to the server.');
     } finally {
       setLoading(false);
@@ -140,43 +154,47 @@ function App() {
           rows={6}
         />
         <button type="submit" className="submit-button" disabled={loading}>
-          {loading ? 'Analyzing...' : 'Analyze Requirement'}
+          {loading ? 'Loading...' : 'Analyze Requirement'}
         </button>
       </form>
 
-      <button
-        type="button"
-        className="submit-button"
-        onClick={handleGenerateSRS}
-        disabled={!requirements || loading}
-        style={{ marginTop: '12px' }}
-      >
-        Generate SRS
-      </button>
+      <div className="button-row">
+        <button
+          type="button"
+          className="submit-button"
+          onClick={handleGenerateSRS}
+          disabled={!requirements || loading}
+        >
+          Generate SRS
+        </button>
 
-      <button
-        type="button"
-        className="submit-button"
-        onClick={handleGenerateC4Context}
-        disabled={!requirements || loading}
-        style={{ marginTop: '12px', marginLeft: '10px' }}
-      >
-        Generate C4 Context
-      </button>
+        <button
+          type="button"
+          className="submit-button"
+          onClick={handleGenerateC4Context}
+          disabled={!requirements || loading}
+        >
+          Generate C4 Context
+        </button>
 
-      <button
-        type="button"
-        className="submit-button"
-        onClick={handleGenerateC4Container}
-        disabled={!requirements || loading}
-        style={{ marginTop: '12px', marginLeft: '10px' }}
-      >
-        Generate C4 Container
-      </button>
+        <button
+          type="button"
+          className="submit-button"
+          onClick={handleGenerateC4Container}
+          disabled={!requirements || loading}
+        >
+          Generate C4 Container
+        </button>
+      </div>
 
       <div className="output-box">
         <h2>Output</h2>
-        <pre>{result || 'No analysis yet.'}</pre>
+
+        {outputType === 'mermaid' ? (
+          <MermaidDiagram chart={result} />
+        ) : (
+          <pre>{result || 'No analysis yet.'}</pre>
+        )}
       </div>
     </div>
   );
