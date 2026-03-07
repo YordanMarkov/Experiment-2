@@ -4,9 +4,10 @@ import { useState } from 'react';
 function App() {
   const [text, setText] = useState('');
   const [result, setResult] = useState('');
+  const [requirements, setRequirements] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleAnalyze = async (e) => {
     e.preventDefault();
 
     if (!text.trim()) return;
@@ -17,10 +18,37 @@ function App() {
 
       const response = await fetch('http://localhost:3001/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: text }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setResult(data.error || 'Something went wrong.');
+        return;
+      }
+
+      setRequirements(data.output);
+      setResult(JSON.stringify(data.output, null, 2));
+    } catch (error) {
+      setResult('Could not connect to the server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateSRS = async () => {
+    if (!requirements) return;
+
+    try {
+      setLoading(true);
+      setResult('Generating SRS...');
+
+      const response = await fetch('http://localhost:3001/generate-srs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requirements }),
       });
 
       const data = await response.json();
@@ -47,7 +75,7 @@ function App() {
         This is part of Experiment #2 from the provided document.
       </p>
 
-      <form className="input-form" onSubmit={handleSubmit}>
+      <form className="input-form" onSubmit={handleAnalyze}>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -59,6 +87,16 @@ function App() {
           {loading ? 'Analyzing...' : 'Analyze Requirement'}
         </button>
       </form>
+
+      <button
+        type="button"
+        className="submit-button"
+        onClick={handleGenerateSRS}
+        disabled={!requirements || loading}
+        style={{ marginTop: '12px' }}
+      >
+        Generate SRS
+      </button>
 
       <div className="output-box">
         <h2>Output</h2>
