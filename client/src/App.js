@@ -1,6 +1,7 @@
 import './App.css';
 import { useState } from 'react';
-import MermaidDiagram from './MermaidDiagram';
+import ContextDiagram from './ContextDiagram';
+import ContainerDiagramMermaid from './ContainerDiagramMermaid';
 
 function App() {
   const [text, setText] = useState('');
@@ -95,7 +96,7 @@ function App() {
         return;
       }
 
-      setOutputType('mermaid');
+      setOutputType('context');
       setResult(data.output);
     } catch (error) {
       setOutputType('text');
@@ -126,7 +127,7 @@ function App() {
         return;
       }
 
-      setOutputType('mermaid');
+      setOutputType('container');
       setResult(data.output);
     } catch (error) {
       setOutputType('text');
@@ -188,15 +189,17 @@ function App() {
       </div>
 
       <div className="output-box">
-        <h2>Output</h2>
+          <h2>Output</h2>
 
-        {outputType === 'mermaid' ? (
-          <MermaidDiagram chart={result} />
-        ) : (
-          <pre>{result || 'No analysis yet.'}</pre>
-        )}
+          {outputType === 'context' ? (
+            <ContextDiagram chart={result} />
+          ) : outputType === 'container' ? (
+            <ContainerDiagramMermaid chart={result} />
+          ) : (
+            <pre>{result || 'No analysis yet.'}</pre>
+          )}
+        </div>
       </div>
-    </div>
   );
 }
 

@@ -144,8 +144,6 @@ Rules:
 
 app.post('/generate-c4-context', async (req, res) => {
   try {
-    console.log('Received /generate-c4-context request');
-
     const { requirements } = req.body;
 
     if (!requirements) {
@@ -160,18 +158,18 @@ app.post('/generate-c4-context', async (req, res) => {
           content: `
 You are a software architect.
 
-Generate a C4 Level 1 Context Diagram using Mermaid syntax.
+Generate a C4 Level 1 Context Diagram using Mermaid C4 syntax.
 
 Rules:
-- Use Mermaid C4Context format
+- Use C4Context syntax only
 - Return Mermaid code only
-- Do not wrap the output in triple backticks
-- The system name is requirements.system_name
-- Actors are external users or external systems interacting with the system
-- Include relationships between actors and the system
-- Do not invent internal containers
+- Do not include triple backticks
+- Do not include explanations
+- Include external users and external systems only
+- Use the provided system_name as the main system
+- Use concise relationship labels
 
-Example format:
+Example:
 
 C4Context
 title Example System
@@ -194,12 +192,8 @@ Rel(system, email, "Sends emails")
       ],
     });
 
-    const output = response.choices[0].message.content;
-
-    console.log('C4 CONTEXT OUTPUT:', output);
-
     res.json({
-      output,
+      output: response.choices[0].message.content,
     });
   } catch (error) {
     console.error('Generate C4 Context failed:', error);
@@ -209,8 +203,6 @@ Rel(system, email, "Sends emails")
 
 app.post('/generate-c4-container', async (req, res) => {
   try {
-    console.log('Received /generate-c4-container request');
-
     const { requirements } = req.body;
 
     if (!requirements) {
@@ -225,33 +217,43 @@ app.post('/generate-c4-container', async (req, res) => {
           content: `
 You are a software architect.
 
-Generate a C4 Level 2 Container Diagram using Mermaid flowchart syntax.
+Generate a C4 Level 2 Container Diagram using Mermaid C4 syntax.
 
 Rules:
-- Use Mermaid flowchart syntax (flowchart LR)
-- Do NOT use C4Container syntax
+- Use C4Container syntax only
 - Return Mermaid code only
 - Do not include triple backticks
+- Do not include explanations
+- The system boundary must use the provided system_name
+- Use realistic generic containers only
+- Prefer these containers when appropriate:
+  - Web Application
+  - Backend API
+  - Database
+- External services such as email must be outside the system boundary
+- Use concise relationship labels
+- Do not invent unnecessary technologies; generic technology labels are acceptable
 
-Represent containers as nodes:
-User --> Web App --> Backend API --> Database
+Example:
 
-Example structure:
+C4Container
+title Example System
 
-flowchart LR
+Person(user, "User")
+Person(admin, "Admin")
+System_Ext(email, "Email Service")
 
-User["User"]
-Admin["Admin"]
-WebApp["Web Application"]
-API["Backend API"]
-Database[("Database")]
-EmailService["Email Service"]
+System_Boundary(system, "Example System") {
+  Container(webapp, "Web Application", "Frontend", "User interface")
+  Container(api, "Backend API", "Backend Service", "Business logic")
+  ContainerDb(db, "Database", "Relational Database", "Stores application data")
+}
 
-User --> WebApp
-Admin --> WebApp
-WebApp --> API
-API --> Database
-API --> EmailService
+Rel(user, webapp, "Uses")
+Rel(admin, webapp, "Uses")
+Rel(webapp, api, "Calls")
+Rel(api, db, "Reads/Writes")
+Rel(api, email, "Sends emails")
           `.trim(),
         },
         {
@@ -261,11 +263,8 @@ API --> EmailService
       ],
     });
 
-    const output = response.choices[0].message.content;
-    console.log('C4 CONTAINER OUTPUT:', output);
-
     res.json({
-      output,
+      output: response.choices[0].message.content,
     });
   } catch (error) {
     console.error('Generate C4 Container failed:', error);
