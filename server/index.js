@@ -74,9 +74,6 @@ Rules:
       });
     }
 
-    console.log('RAW OUTPUT:', rawOutput);
-    console.log('PARSED OUTPUT:', parsedOutput);
-
     res.json({
       output: parsedOutput,
     });
@@ -88,9 +85,7 @@ Rules:
 
 app.post('/generate-srs', async (req, res) => {
   try {
-    console.log('Received /generate-srs request');
     const { requirements } = req.body;
-    console.log('Requirements:', requirements);
 
     if (!requirements) {
       return res.status(400).json({ error: 'Requirements JSON is required.' });
@@ -104,23 +99,29 @@ app.post('/generate-srs', async (req, res) => {
           content: `
 You are a software requirements engineer.
 
-Convert the provided structured requirements JSON into a concise Software Requirements Specification in Markdown.
+Convert the provided structured requirements JSON into a formal Software Requirements Specification in Markdown.
+
+The SRS must be clearly more formal and more specification-like than the extraction step.
 
 Use exactly these sections:
 
 # Software Requirements Specification
-## System Name
-## Actors
-## Goals
-## Functional Requirements
-## Non-Functional Requirements
-## Assumptions
-## Missing Information
+## 1. System Overview
+## 2. Actors
+## 3. Functional Requirements
+## 4. Non-Functional Requirements
+## 5. Assumptions and Constraints
+## 6. Open Issues
 
 Rules:
 - Return Markdown only
-- Do not invent missing details
-- Preserve uncertainty under "Missing Information"
+- Do not include explanations outside the document
+- Functional requirements must be written as formal items with IDs: FR-1, FR-2, ...
+- Non-functional requirements must be written as formal items with IDs: NFR-1, NFR-2, ...
+- If no non-functional requirements are explicitly available, infer only strongly implied ones
+- Constraints such as platform or technology expectations should appear under Assumptions and Constraints
+- Missing or ambiguous details should appear under Open Issues
+- Keep the style concise, formal, and implementation-oriented
           `.trim(),
         },
         {
@@ -131,7 +132,6 @@ Rules:
     });
 
     const output = response.choices[0].message.content;
-    console.log('SRS OUTPUT:', output);
 
     res.json({
       output,
@@ -165,9 +165,12 @@ Rules:
 - Return Mermaid code only
 - Do not include triple backticks
 - Do not include explanations
-- Include external users and external systems only
+- Include only external users and external systems
 - Use the provided system_name as the main system
-- Use concise relationship labels
+- Relationship labels must be very short: 1 to 3 words maximum
+- Avoid long sentences in relationship labels
+- Do not create actor-to-actor relationships
+- Keep the diagram visually simple and readable
 
 Example:
 
@@ -230,8 +233,11 @@ Rules:
   - Web Application
   - Backend API
   - Database
-- External services such as email must be outside the system boundary
-- Use concise relationship labels
+- External services such as email or notification service must be outside the system boundary
+- Relationship labels must be very short: 1 to 3 words maximum
+- Avoid long sentences in relationship labels
+- Keep descriptions concise
+- Keep the diagram visually simple and readable
 - Do not invent unnecessary technologies; generic technology labels are acceptable
 
 Example:

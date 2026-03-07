@@ -6,6 +6,13 @@ mermaid.initialize({
   theme: 'default',
   securityLevel: 'loose',
   suppressErrorRendering: true,
+  themeVariables: {
+    primaryColor: '#4f8fd6',
+    primaryTextColor: '#ffffff',
+    primaryBorderColor: '#3f79ba',
+    lineColor: '#4f5b66',
+    fontSize: '13px',
+  },
 });
 
 function cleanChart(chart) {

@@ -6,7 +6,7 @@ import ContainerDiagramMermaid from './ContainerDiagramMermaid';
 const STEP_ORDER = ['analyze', 'srs', 'context', 'container'];
 
 const STEP_LABELS = {
-  analyze: 'Analyze',
+  analyze: 'Extract Requirements',
   srs: 'SRS',
   context: 'C4 Context',
   container: 'C4 Container',
@@ -154,40 +154,51 @@ function printHtmlDocument(title, bodyHtml) {
   }, 300);
 }
 
-function AnalyzePretty({ data }) {
-  if (!data) return <p className="empty-state">No analysis available yet.</p>;
+function ExtractPretty({ data }) {
+  if (!data) return <p className="empty-state">No extracted requirements yet.</p>;
+
+  const capabilities =
+    data.functional_requirements?.map((item) =>
+      item.replace(/^The system shall\s+/i, '').replace(/^The system should\s+/i, '')
+    ) || [];
 
   const sections = [
-    ['System Name', data.system_name ? [data.system_name] : ['Not specified']],
-    ['Actors', data.actors?.length ? data.actors : ['None identified']],
-    ['Goals', data.goals?.length ? data.goals : ['None identified']],
-    [
-      'Functional Requirements',
-      data.functional_requirements?.length
-        ? data.functional_requirements
-        : ['None identified'],
-    ],
-    [
-      'Non-Functional Requirements',
-      data.non_functional_requirements?.length
-        ? data.non_functional_requirements
-        : ['None identified'],
-    ],
-    ['Assumptions', data.assumptions?.length ? data.assumptions : ['None identified']],
-    [
-      'Missing Information',
-      data.missing_information?.length ? data.missing_information : ['None identified'],
-    ],
+    {
+      title: 'System Snapshot',
+      items: [data.system_name || 'Not specified'],
+    },
+    {
+      title: 'Detected Roles',
+      items: data.actors?.length ? data.actors : ['None identified'],
+    },
+    {
+      title: 'Detected Goals',
+      items: data.goals?.length ? data.goals : ['None identified'],
+    },
+    {
+      title: 'Detected Capabilities',
+      items: capabilities.length ? capabilities : ['No clear capabilities extracted'],
+    },
+    {
+      title: 'Assumptions Made by the AI',
+      items: data.assumptions?.length ? data.assumptions : ['No assumptions identified'],
+    },
+    {
+      title: 'Missing or Ambiguous Information',
+      items: data.missing_information?.length
+        ? data.missing_information
+        : ['No missing information identified'],
+    },
   ];
 
   return (
     <div className="pretty-analysis">
-      {sections.map(([title, items]) => (
-        <section key={title} className="pretty-section">
-          <h4>{title}</h4>
+      {sections.map((section) => (
+        <section key={section.title} className="pretty-section">
+          <h4>{section.title}</h4>
           <ul>
-            {items.map((item, index) => (
-              <li key={`${title}-${index}`}>{item}</li>
+            {section.items.map((item, index) => (
+              <li key={`${section.title}-${index}`}>{item}</li>
             ))}
           </ul>
         </section>
@@ -255,7 +266,15 @@ function MarkdownPretty({ content }) {
     }
 
     if (trimmed.startsWith('- ')) {
-      listBuffer.push(trimmed.slice(2));
+      const htmlContent = trimmed
+        .slice(2)
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      listBuffer.push(
+        <span
+          key={`md-${key++}`}
+          dangerouslySetInnerHTML={{ __html: htmlContent }}
+        />
+      );
       return;
     }
 
@@ -279,7 +298,7 @@ function RawPanel({ raw }) {
 function PrettyPanel({ entry }) {
   switch (entry.step) {
     case 'analyze':
-      return <AnalyzePretty data={entry.prettyData} />;
+      return <ExtractPretty data={entry.prettyData} />;
     case 'srs':
       return <MarkdownPretty content={entry.raw} />;
     case 'context':
@@ -374,26 +393,18 @@ function StepHistoryCard({ entry, pipelineName }) {
   );
 }
 
-function PipelineRunCard({ run, index }) {
+function PipelineRunCard({ run }) {
   const wrapperRef = useRef(null);
-
   const progress = Math.round((run.steps.length / STEP_ORDER.length) * 100);
-  const pipelineName = `Pipeline ${index + 1}`;
+  const pipelineName = `Pipeline ${run.sequence}`;
 
   const handleDownloadPipelineJson = () => {
-    downloadTextFile(
-      `${slugify(pipelineName)}.json`,
-      JSON.stringify(run, null, 2)
-    );
+    downloadTextFile(`${slugify(pipelineName)}.json`, JSON.stringify(run, null, 2));
   };
 
   const handleDownloadPipelineHtml = () => {
     if (!wrapperRef.current) return;
-    downloadHtmlFile(
-      `${slugify(pipelineName)}.html`,
-      pipelineName,
-      wrapperRef.current.innerHTML
-    );
+    downloadHtmlFile(`${slugify(pipelineName)}.html`, pipelineName, wrapperRef.current.innerHTML);
   };
 
   const handlePrintPipeline = () => {
@@ -407,8 +418,7 @@ function PipelineRunCard({ run, index }) {
         <div>
           <h3>{pipelineName}</h3>
           <p className="pipeline-meta">
-            {run.mode === 'pipeline' ? 'Run Pipeline' : 'Manual step-by-step run'} • Started{' '}
-            {run.startedAt}
+            {run.mode === 'pipeline' ? 'Run Pipeline' : 'Manual run'} • Started {run.startedAt}
             {run.finishedAt ? ` • Finished ${run.finishedAt}` : ''}
           </p>
         </div>
@@ -454,11 +464,7 @@ function PipelineRunCard({ run, index }) {
 
         <div className="step-history-list">
           {run.steps.map((entry) => (
-            <StepHistoryCard
-              key={entry.id}
-              entry={entry}
-              pipelineName={pipelineName}
-            />
+            <StepHistoryCard key={entry.id} entry={entry} pipelineName={pipelineName} />
           ))}
         </div>
       </div>
@@ -472,9 +478,13 @@ function App() {
   const [stepStatus, setStepStatus] = useState(EMPTY_STATUS);
   const [activeAction, setActiveAction] = useState('');
   const [pipelineRuns, setPipelineRuns] = useState([]);
+  const [pipelineCounter, setPipelineCounter] = useState(0);
   const [currentRunId, setCurrentRunId] = useState(null);
-  const [statusMessage, setStatusMessage] = useState('Start by analyzing the requirement.');
+  const [statusMessage, setStatusMessage] = useState(
+    'Run the pipeline to generate requirements, SRS, and C4 models.'
+  );
   const [isDirty, setIsDirty] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const isBusy = Boolean(activeAction);
   const hasText = text.trim().length > 0;
@@ -491,8 +501,11 @@ function App() {
   const orderedRuns = useMemo(() => pipelineRuns, [pipelineRuns]);
 
   const createRun = (mode) => {
+    const sequence = pipelineCounter + 1;
+
     const run = {
       id: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      sequence,
       mode,
       input: text,
       startedAt: formatDateTime(),
@@ -500,6 +513,7 @@ function App() {
       steps: [],
     };
 
+    setPipelineCounter(sequence);
     setPipelineRuns((prev) => [...prev, run]);
     setCurrentRunId(run.id);
     return run.id;
@@ -510,10 +524,9 @@ function App() {
       prev.map((run) => {
         if (run.id !== runId) return run;
 
-        const updatedSteps = [...run.steps, entry];
         return {
           ...run,
-          steps: updatedSteps,
+          steps: [...run.steps, entry],
           finishedAt: markFinished ? formatDateTime() : run.finishedAt,
         };
       })
@@ -531,7 +544,7 @@ function App() {
     setText(value);
     setIsDirty(true);
     resetPipelineStateForNewInput();
-    setStatusMessage('Input changed. Analyze again to start a fresh pipeline.');
+    setStatusMessage('Input changed. Run the pipeline again for a fresh result set.');
   };
 
   const postJson = async (url, payload) => {
@@ -571,7 +584,7 @@ function App() {
     });
     setIsDirty(false);
     appendStepToRun(runId, entry);
-    setStatusMessage('Analysis complete. SRS is now available.');
+    setStatusMessage('Requirements extracted. Formal SRS is next.');
 
     return data.output;
   };
@@ -596,7 +609,7 @@ function App() {
       container: false,
     }));
     appendStepToRun(runId, entry);
-    setStatusMessage('SRS generated. C4 Context is now available.');
+    setStatusMessage('Formal SRS generated. C4 Context is next.');
 
     return data.output;
   };
@@ -620,7 +633,7 @@ function App() {
       container: false,
     }));
     appendStepToRun(runId, entry);
-    setStatusMessage('C4 Context generated. C4 Container is now available.');
+    setStatusMessage('C4 Context generated. C4 Container is next.');
 
     return data.output;
   };
@@ -643,7 +656,7 @@ function App() {
       container: true,
     }));
     appendStepToRun(runId, entry, true);
-    setStatusMessage('Pipeline complete. Everything is stored below in sequence.');
+    setStatusMessage('Pipeline complete. Review the grouped history below.');
 
     return data.output;
   };
@@ -654,11 +667,11 @@ function App() {
 
     try {
       setActiveAction('analyze');
-      setStatusMessage('Analyzing requirements...');
+      setStatusMessage('Extracting requirements...');
       const runId = createRun('manual');
       await runAnalyze(runId);
     } catch (error) {
-      setStatusMessage(error.message || 'Could not analyze the requirement.');
+      setStatusMessage(error.message || 'Could not extract requirements.');
     } finally {
       setActiveAction('');
     }
@@ -669,7 +682,7 @@ function App() {
 
     try {
       setActiveAction('srs');
-      setStatusMessage('Generating SRS...');
+      setStatusMessage('Generating formal SRS...');
       await runSRS(requirements, currentRunId);
     } catch (error) {
       setStatusMessage(error.message || 'Could not generate SRS.');
@@ -731,8 +744,7 @@ function App() {
 
       <p className="instructions">
         Enter a software requirement, user story, or description in plain English. The
-        system will attempt to produce a structured specification based on your input.
-        This is part of Experiment #2 from the provided document.
+        system will transform it into structured requirements, an SRS, and C4 models.
       </p>
 
       <form className="input-form" onSubmit={handleAnalyze}>
@@ -744,49 +756,61 @@ function App() {
           rows={6}
         />
 
-        <div className="action-bar">
-          <button type="submit" className="submit-button primary-button" disabled={!canAnalyze}>
-            {activeAction === 'analyze' ? 'Analyzing...' : 'Analyze Requirement'}
-          </button>
-
+        <div className="pipeline-primary-row">
           <button
             type="button"
-            className="submit-button"
-            onClick={handleGenerateSRS}
-            disabled={!canGenerateSRS}
-          >
-            {activeAction === 'srs' ? 'Generating SRS...' : 'Generate SRS'}
-          </button>
-
-          <button
-            type="button"
-            className="submit-button"
-            onClick={handleGenerateC4Context}
-            disabled={!canGenerateContext}
-          >
-            {activeAction === 'context' ? 'Generating C4 Context...' : 'Generate C4 Context'}
-          </button>
-
-          <button
-            type="button"
-            className="submit-button"
-            onClick={handleGenerateC4Container}
-            disabled={!canGenerateContainer}
-          >
-            {activeAction === 'container'
-              ? 'Generating C4 Container...'
-              : 'Generate C4 Container'}
-          </button>
-
-          <button
-            type="button"
-            className="submit-button secondary-button"
+            className="submit-button secondary-button pipeline-main-button"
             onClick={handleRunPipeline}
             disabled={!canRunPipeline}
           >
             {activeAction === 'runAll' ? 'Running pipeline...' : 'Run Pipeline'}
           </button>
+
+          <button
+            type="button"
+            className="toggle-advanced-button"
+            onClick={() => setShowAdvanced((prev) => !prev)}
+          >
+            {showAdvanced ? 'Hide Advanced Controls' : 'Show Advanced Controls'}
+          </button>
         </div>
+
+        {showAdvanced ? (
+          <div className="action-bar advanced-bar">
+            <button type="submit" className="submit-button primary-button" disabled={!canAnalyze}>
+              {activeAction === 'analyze' ? 'Extracting...' : 'Extract Requirements'}
+            </button>
+
+            <button
+              type="button"
+              className="submit-button"
+              onClick={handleGenerateSRS}
+              disabled={!canGenerateSRS}
+            >
+              {activeAction === 'srs' ? 'Generating SRS...' : 'Generate SRS'}
+            </button>
+
+            <button
+              type="button"
+              className="submit-button"
+              onClick={handleGenerateC4Context}
+              disabled={!canGenerateContext}
+            >
+              {activeAction === 'context' ? 'Generating C4 Context...' : 'Generate C4 Context'}
+            </button>
+
+            <button
+              type="button"
+              className="submit-button"
+              onClick={handleGenerateC4Container}
+              disabled={!canGenerateContainer}
+            >
+              {activeAction === 'container'
+                ? 'Generating C4 Container...'
+                : 'Generate C4 Container'}
+            </button>
+          </div>
+        ) : null}
       </form>
 
       <section className="pipeline-status-card">
@@ -818,23 +842,18 @@ function App() {
         <div className="history-header">
           <h2>Pipeline History</h2>
           <p>
-            Each run is grouped as one pipeline. Inside each pipeline, the steps stay in the
-            order they were executed, with raw and pretty outputs side by side.
+            Each run is grouped as one pipeline. Inside each pipeline, steps stay in order
+            and include both raw output and a prettier view.
           </p>
         </div>
 
         {orderedRuns.length === 0 ? (
           <div className="empty-history">
-            No pipeline runs yet. Start with <strong>Analyze Requirement</strong> or use{' '}
-            <strong>Run Pipeline</strong>.
+            No pipeline runs yet. Start with <strong>Run Pipeline</strong>.
           </div>
         ) : (
-          [...orderedRuns].reverse().map((run, index) => (
-            <PipelineRunCard
-              key={run.id}
-              run={run}
-              index={orderedRuns.length - index}
-            />
+          orderedRuns.map((run) => (
+            <PipelineRunCard key={run.id} run={run} />
           ))
         )}
       </section>
