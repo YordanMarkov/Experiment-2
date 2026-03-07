@@ -34,8 +34,11 @@ jobs:
         working-directory: ./client
         run: npm run build
 
-      - name: 5) Placeholder tests
-        run: echo "Tests here"
+      - name: 5) Run client tests
+        working-directory: ./client
+        env:
+          CI: true
+        run: npm test -- --watchAll=false
 
       - name: 6) Install server dependencies
         working-directory: ./server
