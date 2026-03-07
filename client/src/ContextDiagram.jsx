@@ -31,24 +31,23 @@ function cleanChart(chart) {
   return cleaned.trim();
 }
 
-function ContextDiagram({ chart }) {
-  const containerRef = useRef(null);
+function ContextDiagram({ chart, title = 'C4 Context Diagram' }) {
+  const wrapperRef = useRef(null);
+  const canvasRef = useRef(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const renderChart = async () => {
-      if (!chart || !containerRef.current) return;
+      if (!chart || !canvasRef.current) return;
 
       try {
         setError('');
-        containerRef.current.innerHTML = '';
+        canvasRef.current.innerHTML = '';
 
         const cleanedChart = cleanChart(chart);
-        console.log('CONTEXT MERMAID:', cleanedChart);
-
         const id = `context-${Date.now()}`;
         const { svg } = await mermaid.render(id, cleanedChart);
-        containerRef.current.innerHTML = svg;
+        canvasRef.current.innerHTML = svg;
       } catch (err) {
         console.error('Context render error:', err);
         setError('Failed to render context diagram.');
@@ -58,16 +57,47 @@ function ContextDiagram({ chart }) {
     renderChart();
   }, [chart]);
 
-  if (error) {
-    return (
-      <div>
-        <p>{error}</p>
-        <pre>{chart}</pre>
-      </div>
-    );
-  }
+  const handleFullscreen = async () => {
+    if (!wrapperRef.current) return;
+    if (wrapperRef.current.requestFullscreen) {
+      await wrapperRef.current.requestFullscreen();
+    }
+  };
 
-  return <div ref={containerRef} />;
+  const handleDownloadSvg = () => {
+    const svg = canvasRef.current?.querySelector('svg');
+    if (!svg) return;
+
+    const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${title.toLowerCase().replace(/\s+/g, '-')}.svg`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="diagram-shell" ref={wrapperRef}>
+      <div className="diagram-toolbar">
+        <button className="mini-button" onClick={handleFullscreen}>
+          Full Screen
+        </button>
+        <button className="mini-button" onClick={handleDownloadSvg}>
+          Download SVG
+        </button>
+      </div>
+
+      <div className="diagram-canvas" ref={canvasRef} />
+
+      {error ? (
+        <div>
+          <p>{error}</p>
+          <pre className="raw-output">{chart}</pre>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default ContextDiagram;
