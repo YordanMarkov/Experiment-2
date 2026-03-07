@@ -47,6 +47,11 @@ Return JSON with this structure:
 Rules:
 - Do not invent facts
 - If information is missing, add it to missing_information
+- Actors must be external users or external systems that interact with the system
+- Do not include the system itself as an actor
+- Functional requirements must describe what the system should do
+- Non-functional requirements must describe quality attributes such as performance, security, usability, reliability, or scalability
+- Only include non-functional requirements if they are explicitly stated or strongly implied
 - Return JSON only
           `.trim(),
         },
@@ -134,6 +139,70 @@ Rules:
   } catch (error) {
     console.error('Generate SRS failed:', error);
     res.status(500).json({ error: 'Failed to generate SRS.' });
+  }
+});
+
+app.post('/generate-c4-context', async (req, res) => {
+  try {
+    console.log('Received /generate-c4-context request');
+
+    const { requirements } = req.body;
+
+    if (!requirements) {
+      return res.status(400).json({ error: 'Requirements JSON is required.' });
+    }
+
+    const response = await client.chat.completions.create({
+      model: 'gpt-4.1-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `
+You are a software architect.
+
+Generate a C4 Level 1 Context Diagram using Mermaid syntax.
+
+Rules:
+- Use Mermaid C4Context format
+- The system name is requirements.system_name
+- Actors are external users or systems interacting with the system
+- Include relationships between actors and the system
+- Do not invent internal containers
+- Return Mermaid code only
+
+Example format:
+
+C4Context
+title Example System
+
+Person(user, "User")
+Person(admin, "Admin")
+System_Ext(email, "Email Service")
+
+System(system, "Example System")
+
+Rel(user, system, "Uses")
+Rel(admin, system, "Manages")
+Rel(system, email, "Sends emails")
+          `.trim(),
+        },
+        {
+          role: 'user',
+          content: JSON.stringify(requirements, null, 2),
+        },
+      ],
+    });
+
+    const output = response.choices[0].message.content;
+
+    console.log('C4 CONTEXT OUTPUT:', output);
+
+    res.json({
+      output,
+    });
+  } catch (error) {
+    console.error('Generate C4 Context failed:', error);
+    res.status(500).json({ error: 'Failed to generate C4 Context.' });
   }
 });
 

@@ -39,13 +39,7 @@ function App() {
   };
 
   const handleGenerateSRS = async () => {
-    if (!requirements) {
-      console.log('No requirements available');
-      return;
-    }
-
-    console.log('Generate SRS clicked');
-    console.log('Requirements being sent:', requirements);
+    if (!requirements) return;
 
     try {
       setLoading(true);
@@ -57,10 +51,7 @@ function App() {
         body: JSON.stringify({ requirements }),
       });
 
-      console.log('Response status:', response.status);
-
       const data = await response.json();
-      console.log('Response data:', data);
 
       if (!response.ok) {
         setResult(data.error || 'Something went wrong.');
@@ -69,7 +60,34 @@ function App() {
 
       setResult(data.output);
     } catch (error) {
-      console.error('Generate SRS error:', error);
+      setResult('Could not connect to the server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateC4Context = async () => {
+    if (!requirements) return;
+
+    try {
+      setLoading(true);
+      setResult('Generating C4 Context Diagram...');
+
+      const response = await fetch('http://localhost:3001/generate-c4-context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requirements }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setResult(data.error || 'Something went wrong.');
+        return;
+      }
+
+      setResult(data.output);
+    } catch (error) {
       setResult('Could not connect to the server.');
     } finally {
       setLoading(false);
@@ -106,6 +124,16 @@ function App() {
         style={{ marginTop: '12px' }}
       >
         Generate SRS
+      </button>
+
+      <button
+        type="button"
+        className="submit-button"
+        onClick={handleGenerateC4Context}
+        disabled={!requirements || loading}
+        style={{ marginTop: '12px', marginLeft: '10px' }}
+      >
+        Generate C4 Context
       </button>
 
       <div className="output-box">
