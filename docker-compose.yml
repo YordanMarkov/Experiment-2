@@ -1,22 +1,18 @@
 services:
-    database:
-       image: mysql:latest
-       container_name: my-db
-       restart: always
+  database:
+    image: mysql:latest
+    container_name: my-db
+    restart: always
+    volumes:
+      - my-db-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    ports:
+      - "3306:3306"
+    expose:
+      - 3306
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_DATABASE: my-db-name
 
-       volumes:
-         - my-db-data:/var/lib/mysql
-
-       ports:
-         - "3306:3306"
-
-       expose:
-         - 3306
-
-       environment:
-         MYSQL_ROOT_PASSWORD: admin
-         MYSQL_DATABASE: my-db-name
-         
 volumes:
-    my-db-data:
-
+  my-db-data:
