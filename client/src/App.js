@@ -3,8 +3,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import ContextDiagram from './ContextDiagram';
 import ContainerDiagramMermaid from './ContainerDiagramMermaid';
 
+const IS_LOCAL = window.location.hostname === 'localhost';
+
 const API_BASE_URL =
-  window.location.hostname === 'localhost' ? 'http://localhost:3001' : '/api';
+  process.env.REACT_APP_API_BASE_URL || (IS_LOCAL ? 'http://localhost:3001' : '/api');
+
+const STORAGE_ENABLED =
+  process.env.REACT_APP_STORAGE_ENABLED === 'true' || IS_LOCAL;
 
 const STEP_ORDER = ['analyze', 'srs', 'context', 'container'];
 
@@ -484,7 +489,9 @@ function App() {
   const [pipelineCounter, setPipelineCounter] = useState(0);
   const [currentRunId, setCurrentRunId] = useState(null);
   const [statusMessage, setStatusMessage] = useState(
-    'Run the pipeline to generate requirements, SRS, and C4 models.'
+    STORAGE_ENABLED
+      ? 'Run the pipeline to generate requirements, SRS, and C4 models.'
+      : 'Run the pipeline to generate requirements, SRS, and C4 models. This deployment works without persistent storage.'
   );
   const [isDirty, setIsDirty] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -503,18 +510,37 @@ function App() {
 
   const orderedRuns = useMemo(() => pipelineRuns, [pipelineRuns]);
 
+  const postJson = async (url, payload) => {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Something went wrong.');
+    }
+
+    return data;
+  };
+
+  const getCurrentRun = () => pipelineRuns.find((run) => run.id === currentRunId) || null;
+
   const createRun = async (mode) => {
     const sequence = pipelineCounter + 1;
-
     let backendRunId = null;
 
-    try {
-      const response = await postJson(`${API_BASE_URL}/pipeline-runs`, {
-        input_text: text,
-      });
-      backendRunId = response.id;
-    } catch (error) {
-      throw new Error('Could not create pipeline run.');
+    if (STORAGE_ENABLED) {
+      try {
+        const response = await postJson(`${API_BASE_URL}/pipeline-runs`, {
+          input_text: text,
+        });
+        backendRunId = response.id;
+      } catch (error) {
+        console.warn('Could not create backend pipeline run. Continuing without storage.', error);
+      }
     }
 
     const run = {
@@ -531,6 +557,11 @@ function App() {
     setPipelineCounter(sequence);
     setPipelineRuns((prev) => [...prev, run]);
     setCurrentRunId(run.id);
+
+    if (!backendRunId && !STORAGE_ENABLED) {
+      setStatusMessage('Running without persistent storage on this deployment.');
+    }
+
     return run;
   };
 
@@ -562,28 +593,13 @@ function App() {
     setStatusMessage('Input changed. Run the pipeline again for a fresh result set.');
   };
 
-  const postJson = async (url, payload) => {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Something went wrong.');
-    }
-
-    return data;
-  };
-
   const runAnalyze = async (run) => {
-    const data = await postJson(`${API_BASE_URL}/generate`, {
+    const payload = {
       input: text,
-      run_id: run.backendRunId,
-    });
+      ...(run.backendRunId ? { run_id: run.backendRunId } : {}),
+    };
 
+    const data = await postJson(`${API_BASE_URL}/generate`, payload);
     const raw = JSON.stringify(data.output, null, 2);
 
     const entry = {
@@ -609,10 +625,12 @@ function App() {
   };
 
   const runSRS = async (sourceRequirements, run) => {
-    const data = await postJson(`${API_BASE_URL}/generate-srs`, {
+    const payload = {
       requirements: sourceRequirements,
-      run_id: run.backendRunId,
-    });
+      ...(run.backendRunId ? { run_id: run.backendRunId } : {}),
+    };
+
+    const data = await postJson(`${API_BASE_URL}/generate-srs`, payload);
 
     const entry = {
       id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -635,10 +653,12 @@ function App() {
   };
 
   const runContext = async (sourceRequirements, run) => {
-    const data = await postJson(`${API_BASE_URL}/generate-c4-context`, {
+    const payload = {
       requirements: sourceRequirements,
-      run_id: run.backendRunId,
-    });
+      ...(run.backendRunId ? { run_id: run.backendRunId } : {}),
+    };
+
+    const data = await postJson(`${API_BASE_URL}/generate-c4-context`, payload);
 
     const entry = {
       id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -660,10 +680,12 @@ function App() {
   };
 
   const runContainer = async (sourceRequirements, run) => {
-    const data = await postJson(`${API_BASE_URL}/generate-c4-container`, {
+    const payload = {
       requirements: sourceRequirements,
-      run_id: run.backendRunId,
-    });
+      ...(run.backendRunId ? { run_id: run.backendRunId } : {}),
+    };
+
+    const data = await postJson(`${API_BASE_URL}/generate-c4-container`, payload);
 
     const entry = {
       id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -702,10 +724,16 @@ function App() {
   const handleGenerateSRS = async () => {
     if (!canGenerateSRS || !requirements || !currentRunId) return;
 
+    const run = getCurrentRun();
+    if (!run) {
+      setStatusMessage('Could not find the current pipeline run.');
+      return;
+    }
+
     try {
       setActiveAction('srs');
       setStatusMessage('Generating formal SRS...');
-      await runSRS(requirements, currentRunId);
+      await runSRS(requirements, run);
     } catch (error) {
       setStatusMessage(error.message || 'Could not generate SRS.');
     } finally {
@@ -716,10 +744,16 @@ function App() {
   const handleGenerateC4Context = async () => {
     if (!canGenerateContext || !requirements || !currentRunId) return;
 
+    const run = getCurrentRun();
+    if (!run) {
+      setStatusMessage('Could not find the current pipeline run.');
+      return;
+    }
+
     try {
       setActiveAction('context');
       setStatusMessage('Generating C4 Context...');
-      await runContext(requirements, currentRunId);
+      await runContext(requirements, run);
     } catch (error) {
       setStatusMessage(error.message || 'Could not generate C4 Context.');
     } finally {
@@ -730,10 +764,16 @@ function App() {
   const handleGenerateC4Container = async () => {
     if (!canGenerateContainer || !requirements || !currentRunId) return;
 
+    const run = getCurrentRun();
+    if (!run) {
+      setStatusMessage('Could not find the current pipeline run.');
+      return;
+    }
+
     try {
       setActiveAction('container');
       setStatusMessage('Generating C4 Container...');
-      await runContainer(requirements, currentRunId);
+      await runContainer(requirements, run);
     } catch (error) {
       setStatusMessage(error.message || 'Could not generate C4 Container.');
     } finally {
@@ -761,6 +801,10 @@ function App() {
   };
 
   useEffect(() => {
+    if (!STORAGE_ENABLED) {
+      return;
+    }
+
     const loadHistory = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/history`);
@@ -821,7 +865,7 @@ function App() {
             input: run.input_text,
             startedAt: formatDateTime(new Date(run.created_at)),
             finishedAt: steps.length
-              ? steps[steps.length - 1].timestamp
+              ? formatDateTime(new Date(run.container?.created_at || run.created_at))
               : formatDateTime(new Date(run.created_at)),
             steps,
           };
@@ -948,7 +992,16 @@ function App() {
 
         {orderedRuns.length === 0 ? (
           <div className="empty-history">
-            No pipeline runs yet. Start with <strong>Run Pipeline</strong>.
+            {STORAGE_ENABLED ? (
+              <>
+                No pipeline runs yet. Start with <strong>Run Pipeline</strong>.
+              </>
+            ) : (
+              <>
+                This deployment runs without persistent history. Start with{' '}
+                <strong>Run Pipeline</strong>.
+              </>
+            )}
           </div>
         ) : (
           orderedRuns.map((run) => (
