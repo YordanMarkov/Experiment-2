@@ -109,12 +109,53 @@ Rules:
       });
     }
 
+    let insertedId = null;
+
+    if (db) {
+      const [result] = await db.execute(
+        'INSERT INTO requirements (content) VALUES (?)',
+        [JSON.stringify(parsedOutput)]
+      );
+      insertedId = result.insertId;
+    }
+
     res.json({
       output: parsedOutput,
+      saved: Boolean(db),
+      id: insertedId,
     });
   } catch (error) {
-    console.error(error);
+    console.error('Generate failed:', error);
     res.status(500).json({ error: 'Failed to generate analysis.' });
+  }
+});
+
+// NEW: SELECT FROM SQL
+app.get('/requirements', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
+
+  try {
+    const [rows] = await db.execute(
+      'SELECT id, content, created_at FROM requirements ORDER BY id DESC'
+    );
+
+    // Optional: parse JSON content before sending
+    const parsed = rows.map((row) => ({
+      id: row.id,
+      content: typeof row.content === 'string'
+        ? JSON.parse(row.content)
+        : row.content,
+      created_at: row.created_at,
+    }));
+
+    res.status(200).json({
+      data: parsed,
+    });
+  } catch (error) {
+    console.error('Fetch requirements failed:', error);
+    res.status(500).json({ error: 'Failed to fetch requirements.' });
   }
 });
 
@@ -168,12 +209,41 @@ Rules:
 
     const output = response.choices[0].message.content;
 
+    let insertedId = null;
+
+    if (db) {
+      const [result] = await db.execute(
+        'INSERT INTO srs_documents (content) VALUES (?)',
+        [output]
+      );
+      insertedId = result.insertId;
+    }
+
     res.json({
       output,
+      saved: Boolean(db),
+      id: insertedId,
     });
   } catch (error) {
     console.error('Generate SRS failed:', error);
     res.status(500).json({ error: 'Failed to generate SRS.' });
+  }
+});
+
+// NEW: SELECT FROM SQL
+app.get('/srs', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
+
+  try {
+    const [rows] = await db.execute(
+      'SELECT id, content, created_at FROM srs_documents ORDER BY id DESC'
+    );
+    res.status(200).json({ data: rows });
+  } catch (error) {
+    console.error('Fetch SRS failed:', error);
+    res.status(500).json({ error: 'Failed to fetch SRS documents.' });
   }
 });
 
@@ -230,8 +300,22 @@ Rel(system, email, "Sends emails")
       ],
     });
 
+    const output = response.choices[0].message.content;
+
+    let insertedId = null;
+
+    if (db) {
+      const [result] = await db.execute(
+        'INSERT INTO c4_diagrams (diagram_type, content) VALUES (?, ?)',
+        ['context', output]
+      );
+      insertedId = result.insertId;
+    }
+
     res.json({
-      output: response.choices[0].message.content,
+      output,
+      saved: Boolean(db),
+      id: insertedId,
     });
   } catch (error) {
     console.error('Generate C4 Context failed:', error);
@@ -304,12 +388,46 @@ Rel(api, email, "Sends emails")
       ],
     });
 
+    const output = response.choices[0].message.content;
+
+    let insertedId = null;
+
+    if (db) {
+      const [result] = await db.execute(
+        'INSERT INTO c4_diagrams (diagram_type, content) VALUES (?, ?)',
+        ['container', output]
+      );
+      insertedId = result.insertId;
+    }
+
     res.json({
-      output: response.choices[0].message.content,
+      output,
+      saved: Boolean(db),
+      id: insertedId,
     });
   } catch (error) {
     console.error('Generate C4 Container failed:', error);
     res.status(500).json({ error: 'Failed to generate C4 Container.' });
+  }
+});
+
+// NEW: SELECT FROM SQL
+app.get('/c4-diagrams', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
+
+  try {
+    const [rows] = await db.execute(
+      'SELECT id, diagram_type, content, created_at FROM c4_diagrams ORDER BY id DESC'
+    );
+
+    res.status(200).json({
+      data: rows,
+    });
+  } catch (error) {
+    console.error('Fetch C4 diagrams failed:', error);
+    res.status(500).json({ error: 'Failed to fetch C4 diagrams.' });
   }
 });
 
