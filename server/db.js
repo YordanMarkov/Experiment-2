@@ -1,10 +1,18 @@
 import mysql from 'mysql2/promise';
 
-export const db = await mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'admin',
-  database: 'my-db-name'
-});
+let db = null;
 
-console.log("✅ Connected to MySQL");
+try {
+  db = await mysql.createConnection({
+    host: '127.0.0.1',
+    user: 'root',
+    password: 'admin',
+    database: 'my-db-name',
+  });
+
+  console.log('✅ Connected to MySQL');
+} catch (error) {
+  console.log('⚠️ MySQL not available, continuing without DB');
+}
+
+export { db };
