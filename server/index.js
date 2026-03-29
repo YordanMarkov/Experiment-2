@@ -44,13 +44,39 @@ app.get('/test-db', async (req, res) => {
   }
 });
 
+app.post('/pipeline-runs', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
+
+  try {
+    const { input_text } = req.body;
+
+    if (!input_text || !input_text.trim()) {
+      return res.status(400).json({ error: 'Input text is required.' });
+    }
+
+    const [result] = await db.execute(
+      'INSERT INTO pipeline_runs (input_text) VALUES (?)',
+      [input_text]
+    );
+
+    res.status(201).json({
+      id: result.insertId,
+    });
+  } catch (error) {
+    console.error('Create pipeline run failed:', error);
+    res.status(500).json({ error: 'Failed to create pipeline run.' });
+  }
+});
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
 app.post('/generate', async (req, res) => {
   try {
-    const { input } = req.body;
+    const { input, run_id } = req.body;
 
     if (!input || !input.trim()) {
       return res.status(400).json({ error: 'Input is required.' });
@@ -113,8 +139,8 @@ Rules:
 
     if (db) {
       const [result] = await db.execute(
-        'INSERT INTO requirements (content) VALUES (?)',
-        [JSON.stringify(parsedOutput)]
+        'INSERT INTO requirements (content, run_id) VALUES (?, ?)',
+        [JSON.stringify(parsedOutput), run_id || null]
       );
       insertedId = result.insertId;
     }
@@ -161,7 +187,7 @@ app.get('/requirements', async (req, res) => {
 
 app.post('/generate-srs', async (req, res) => {
   try {
-    const { requirements } = req.body;
+    const { requirements, run_id } = req.body;
 
     if (!requirements) {
       return res.status(400).json({ error: 'Requirements JSON is required.' });
@@ -213,8 +239,8 @@ Rules:
 
     if (db) {
       const [result] = await db.execute(
-        'INSERT INTO srs_documents (content) VALUES (?)',
-        [output]
+        'INSERT INTO srs_documents (content, run_id) VALUES (?, ?)',
+        [output, run_id || null]
       );
       insertedId = result.insertId;
     }
@@ -249,7 +275,7 @@ app.get('/srs', async (req, res) => {
 
 app.post('/generate-c4-context', async (req, res) => {
   try {
-    const { requirements } = req.body;
+    const { requirements, run_id } = req.body;
 
     if (!requirements) {
       return res.status(400).json({ error: 'Requirements JSON is required.' });
@@ -272,6 +298,9 @@ Rules:
 - Do not include explanations
 - Include only external users and external systems
 - Use the provided system_name as the main system
+- The main system must be declared using System(...)
+- Do NOT use System_Boundary(...)
+- Do NOT use Container(...) or ContainerDb(...)
 - Relationship labels must be very short: 1 to 3 words maximum
 - Avoid long sentences in relationship labels
 - Do not create actor-to-actor relationships
@@ -280,17 +309,17 @@ Rules:
 Example:
 
 C4Context
-title Example System
+title Example System Context Diagram
 
 Person(user, "User")
 Person(admin, "Admin")
 System_Ext(email, "Email Service")
 
-System(system, "Example System")
+System(main_system, "Example System")
 
-Rel(user, system, "Uses")
-Rel(admin, system, "Manages")
-Rel(system, email, "Sends emails")
+Rel(user, main_system, "Uses")
+Rel(admin, main_system, "Manages")
+Rel(main_system, email, "Sends")
           `.trim(),
         },
         {
@@ -306,8 +335,8 @@ Rel(system, email, "Sends emails")
 
     if (db) {
       const [result] = await db.execute(
-        'INSERT INTO c4_diagrams (diagram_type, content) VALUES (?, ?)',
-        ['context', output]
+        'INSERT INTO c4_diagrams (diagram_type, content, run_id) VALUES (?, ?, ?)',
+        ['context', output, run_id || null]
       );
       insertedId = result.insertId;
     }
@@ -325,7 +354,7 @@ Rel(system, email, "Sends emails")
 
 app.post('/generate-c4-container', async (req, res) => {
   try {
-    const { requirements } = req.body;
+    const { requirements, run_id } = req.body;
 
     if (!requirements) {
       return res.status(400).json({ error: 'Requirements JSON is required.' });
@@ -358,27 +387,6 @@ Rules:
 - Keep descriptions concise
 - Keep the diagram visually simple and readable
 - Do not invent unnecessary technologies; generic technology labels are acceptable
-
-Example:
-
-C4Container
-title Example System
-
-Person(user, "User")
-Person(admin, "Admin")
-System_Ext(email, "Email Service")
-
-System_Boundary(system, "Example System") {
-  Container(webapp, "Web Application", "Frontend", "User interface")
-  Container(api, "Backend API", "Backend Service", "Business logic")
-  ContainerDb(db, "Database", "Relational Database", "Stores application data")
-}
-
-Rel(user, webapp, "Uses")
-Rel(admin, webapp, "Uses")
-Rel(webapp, api, "Calls")
-Rel(api, db, "Reads/Writes")
-Rel(api, email, "Sends emails")
           `.trim(),
         },
         {
@@ -394,8 +402,8 @@ Rel(api, email, "Sends emails")
 
     if (db) {
       const [result] = await db.execute(
-        'INSERT INTO c4_diagrams (diagram_type, content) VALUES (?, ?)',
-        ['container', output]
+        'INSERT INTO c4_diagrams (diagram_type, content, run_id) VALUES (?, ?, ?)',
+        ['container', output, run_id || null]
       );
       insertedId = result.insertId;
     }
@@ -428,6 +436,74 @@ app.get('/c4-diagrams', async (req, res) => {
   } catch (error) {
     console.error('Fetch C4 diagrams failed:', error);
     res.status(500).json({ error: 'Failed to fetch C4 diagrams.' });
+  }
+});
+
+// NEW: Get history
+app.get('/history', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
+
+  try {
+    const [runs] = await db.execute(
+      'SELECT id, input_text, created_at FROM pipeline_runs ORDER BY id DESC'
+    );
+
+    const history = [];
+
+    for (const run of runs) {
+      const [requirementsRows] = await db.execute(
+        'SELECT id, content, created_at FROM requirements WHERE run_id = ? ORDER BY id DESC LIMIT 1',
+        [run.id]
+      );
+
+      const [srsRows] = await db.execute(
+        'SELECT id, content, created_at FROM srs_documents WHERE run_id = ? ORDER BY id DESC LIMIT 1',
+        [run.id]
+      );
+
+      const [contextRows] = await db.execute(
+        `SELECT id, content, created_at
+         FROM c4_diagrams
+         WHERE run_id = ? AND diagram_type = 'context'
+         ORDER BY id DESC
+         LIMIT 1`,
+        [run.id]
+      );
+
+      const [containerRows] = await db.execute(
+        `SELECT id, content, created_at
+         FROM c4_diagrams
+         WHERE run_id = ? AND diagram_type = 'container'
+         ORDER BY id DESC
+         LIMIT 1`,
+        [run.id]
+      );
+
+      history.push({
+        run_id: run.id,
+        input_text: run.input_text,
+        created_at: run.created_at,
+        requirements: requirementsRows[0]
+          ? {
+              ...requirementsRows[0],
+              content:
+                typeof requirementsRows[0].content === 'string'
+                  ? JSON.parse(requirementsRows[0].content)
+                  : requirementsRows[0].content,
+            }
+          : null,
+        srs: srsRows[0] || null,
+        context: contextRows[0] || null,
+        container: containerRows[0] || null,
+      });
+    }
+
+    res.status(200).json({ data: history });
+  } catch (error) {
+    console.error('Fetch history failed:', error);
+    res.status(500).json({ error: 'Failed to fetch history.' });
   }
 });
 

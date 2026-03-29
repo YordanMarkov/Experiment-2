@@ -1,5 +1,5 @@
 import './App.css';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ContextDiagram from './ContextDiagram';
 import ContainerDiagramMermaid from './ContainerDiagramMermaid';
 
@@ -503,11 +503,23 @@ function App() {
 
   const orderedRuns = useMemo(() => pipelineRuns, [pipelineRuns]);
 
-  const createRun = (mode) => {
+  const createRun = async (mode) => {
     const sequence = pipelineCounter + 1;
+
+    let backendRunId = null;
+
+    try {
+      const response = await postJson(`${API_BASE_URL}/pipeline-runs`, {
+        input_text: text,
+      });
+      backendRunId = response.id;
+    } catch (error) {
+      throw new Error('Could not create pipeline run.');
+    }
 
     const run = {
       id: `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      backendRunId,
       sequence,
       mode,
       input: text,
@@ -519,7 +531,7 @@ function App() {
     setPipelineCounter(sequence);
     setPipelineRuns((prev) => [...prev, run]);
     setCurrentRunId(run.id);
-    return run.id;
+    return run;
   };
 
   const appendStepToRun = (runId, entry, markFinished = false) => {
@@ -566,8 +578,12 @@ function App() {
     return data;
   };
 
-  const runAnalyze = async (runId) => {
-    const data = await postJson(`${API_BASE_URL}/generate`, { input: text });
+  const runAnalyze = async (run) => {
+    const data = await postJson(`${API_BASE_URL}/generate`, {
+      input: text,
+      run_id: run.backendRunId,
+    });
+
     const raw = JSON.stringify(data.output, null, 2);
 
     const entry = {
@@ -586,14 +602,17 @@ function App() {
       container: false,
     });
     setIsDirty(false);
-    appendStepToRun(runId, entry);
+    appendStepToRun(run.id, entry);
     setStatusMessage('Requirements extracted. Formal SRS is next.');
 
     return data.output;
   };
 
-  const runSRS = async (sourceRequirements, runId) => {
-    const data = await postJson(`${API_BASE_URL}/generate-srs`, { requirements: sourceRequirements });
+  const runSRS = async (sourceRequirements, run) => {
+    const data = await postJson(`${API_BASE_URL}/generate-srs`, {
+      requirements: sourceRequirements,
+      run_id: run.backendRunId,
+    });
 
     const entry = {
       id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -609,14 +628,17 @@ function App() {
       context: false,
       container: false,
     }));
-    appendStepToRun(runId, entry);
+    appendStepToRun(run.id, entry);
     setStatusMessage('Formal SRS generated. C4 Context is next.');
 
     return data.output;
   };
 
-  const runContext = async (sourceRequirements, runId) => {
-    const data = await postJson(`${API_BASE_URL}/generate-c4-context`, { requirements: sourceRequirements });
+  const runContext = async (sourceRequirements, run) => {
+    const data = await postJson(`${API_BASE_URL}/generate-c4-context`, {
+      requirements: sourceRequirements,
+      run_id: run.backendRunId,
+    });
 
     const entry = {
       id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -631,14 +653,17 @@ function App() {
       context: true,
       container: false,
     }));
-    appendStepToRun(runId, entry);
+    appendStepToRun(run.id, entry);
     setStatusMessage('C4 Context generated. C4 Container is next.');
 
     return data.output;
   };
 
-  const runContainer = async (sourceRequirements, runId) => {
-    const data = await postJson(`${API_BASE_URL}/generate-c4-container`, { requirements: sourceRequirements });
+  const runContainer = async (sourceRequirements, run) => {
+    const data = await postJson(`${API_BASE_URL}/generate-c4-container`, {
+      requirements: sourceRequirements,
+      run_id: run.backendRunId,
+    });
 
     const entry = {
       id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -652,7 +677,7 @@ function App() {
       ...prev,
       container: true,
     }));
-    appendStepToRun(runId, entry, true);
+    appendStepToRun(run.id, entry, true);
     setStatusMessage('Pipeline complete. Review the grouped history below.');
 
     return data.output;
@@ -665,8 +690,8 @@ function App() {
     try {
       setActiveAction('analyze');
       setStatusMessage('Extracting requirements...');
-      const runId = createRun('manual');
-      await runAnalyze(runId);
+      const run = await createRun('manual');
+      await runAnalyze(run);
     } catch (error) {
       setStatusMessage(error.message || 'Could not extract requirements.');
     } finally {
@@ -722,11 +747,11 @@ function App() {
     try {
       setActiveAction('runAll');
       setStatusMessage('Running full pipeline...');
-      const runId = createRun('pipeline');
-      const analyzedRequirements = await runAnalyze(runId);
-      await runSRS(analyzedRequirements, runId);
-      await runContext(analyzedRequirements, runId);
-      await runContainer(analyzedRequirements, runId);
+      const run = await createRun('pipeline');
+      const analyzedRequirements = await runAnalyze(run);
+      await runSRS(analyzedRequirements, run);
+      await runContext(analyzedRequirements, run);
+      await runContainer(analyzedRequirements, run);
       setStatusMessage('Full pipeline finished successfully.');
     } catch (error) {
       setStatusMessage(error.message || 'Pipeline failed.');
@@ -734,6 +759,83 @@ function App() {
       setActiveAction('');
     }
   };
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/history`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to load history.');
+        }
+
+        const loadedRuns = data.data.map((run, index) => {
+          const steps = [];
+
+          if (run.requirements) {
+            steps.push({
+              id: `history-${run.run_id}-analyze`,
+              step: 'analyze',
+              raw: JSON.stringify(run.requirements.content, null, 2),
+              prettyData: run.requirements.content,
+              timestamp: formatTimestamp(new Date(run.requirements.created_at)),
+            });
+          }
+
+          if (run.srs) {
+            steps.push({
+              id: `history-${run.run_id}-srs`,
+              step: 'srs',
+              raw: run.srs.content,
+              prettyData: null,
+              timestamp: formatTimestamp(new Date(run.srs.created_at)),
+            });
+          }
+
+          if (run.context) {
+            steps.push({
+              id: `history-${run.run_id}-context`,
+              step: 'context',
+              raw: run.context.content,
+              prettyData: null,
+              timestamp: formatTimestamp(new Date(run.context.created_at)),
+            });
+          }
+
+          if (run.container) {
+            steps.push({
+              id: `history-${run.run_id}-container`,
+              step: 'container',
+              raw: run.container.content,
+              prettyData: null,
+              timestamp: formatTimestamp(new Date(run.container.created_at)),
+            });
+          }
+
+          return {
+            id: `loaded-run-${run.run_id}`,
+            backendRunId: run.run_id,
+            sequence: data.data.length - index,
+            mode: 'pipeline',
+            input: run.input_text,
+            startedAt: formatDateTime(new Date(run.created_at)),
+            finishedAt: steps.length
+              ? steps[steps.length - 1].timestamp
+              : formatDateTime(new Date(run.created_at)),
+            steps,
+          };
+        });
+
+        setPipelineRuns(loadedRuns.reverse());
+        setPipelineCounter(loadedRuns.length);
+      } catch (error) {
+        console.error('Load history failed:', error);
+      }
+    };
+
+    loadHistory();
+  }, []);
 
   return (
     <div className="App">
