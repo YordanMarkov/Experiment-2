@@ -15,6 +15,10 @@ const client = new OpenAI({
 });
 
 app.get('/test-db', async (req, res) => {
+  if (!db) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
+
   try {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS test_table (
